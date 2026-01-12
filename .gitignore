@@ -1,0 +1,25 @@
+.idea/
+.DS_Store
+
+build/
+buildsim/
+build-sim/
+cmake-build-*/
+CMakeCache.txt
+*.cbp
+CMakeFiles
+
+release/
+
+sdkconfig
+sdkconfig.old
+
+managed_components/
+dependencies.lock
+
+.vscode/
+*.code-workspace
+.gitpod.yml
+
+New Folder
+New Folder (2)

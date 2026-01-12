@@ -1,0 +1,82 @@
+menu "FTP Server Configuration"
+
+    menu "FTP Server Setting"
+
+        config FTP_USER
+            string "FTP User Name"
+            default "esp32"
+            help
+                FTP User name for this Server.
+
+        config FTP_PASSWORD
+            string "FTP Password"
+            default "esp32"
+            help
+                FTP Password for this Server.
+
+        config FTP_PASSIVE_PORT
+            int "FTP Passive Mode Data Port"
+            default 2024
+            range 1024 65535
+            help
+                TCP port for FTP passive mode data connections
+
+        config WIFI_SSID
+            string "Wifi SSID"
+            default ""
+            help
+                Wifi SSID.
+
+        config WIFI_PASSWORD
+            string "Wifi Password"
+            default ""
+            help
+                Wifi Password.
+
+        config TIMEZONE
+            string "Timezone String"
+            default "AEST-10"
+            help
+                POSIX timezone string (e.g., "EST5EDT", "PST8PDT", "CST-8", "UTC0")
+
+                Common examples:
+                - US Eastern:    EST5EDT,M3.2.0/2,M11.1.0
+                - US Pacific:    PST8PDT,M3.2.0/2,M11.1.0
+                - US Central:    CST6CDT,M3.2.0/2,M11.1.0
+                - Australia AEST: AEST-10AEDT,M10.1.0,M4.1.0/3
+                - UTC:           UTC0
+                - China (CST):   CST-8
+
+                See: https://www.gnu.org/software/libc/manual/html_node/TZ-Variable.html
+
+        config SDCARD_MOSI_GPIO
+            int "SD Card MOSI GPIO"
+            default 11
+            range 0 48
+            help
+                GPIO pin for SD card MOSI signal.
+
+        config SDCARD_MISO_GPIO
+            int "SD Card MISO GPIO"
+            default 13
+            range 0 48
+            help
+                GPIO pin for SD card MISO signal.
+
+        config SDCARD_SCLK_GPIO
+            int "SD Card SCLK GPIO"
+            default 12
+            range 0 48
+            help
+                GPIO pin for SD card SCLK signal.
+
+        config SDCARD_CS_GPIO
+            int "SD Card CS GPIO"
+            default 10
+            range 0 48
+            help
+                GPIO pin for SD card CS (chip select) signal.
+
+    endmenu
+
+endmenu
