@@ -314,7 +314,7 @@ extern "C" void app_main(void) {
     CHECKPOINT("Starting Phase 7");
     ESP_LOGI(TAG, "Phase 7: Creating FTP server instance");
 
-    ftpServer = new  FtpServer::Server();
+    ftpServer = new FtpServer::Server();
 
     if (!ftpServer) {
         ESP_LOGE(TAG, "Failed to allocate FTP server!");
