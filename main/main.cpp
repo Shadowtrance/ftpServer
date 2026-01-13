@@ -25,6 +25,8 @@ static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
 static bool screen_created = false;
 static bool sdcard_was_present = false;
+static uint32_t sdcard_mount_retry_count = 0;
+static constexpr uint32_t MAX_SD_MOUNT_RETRIES = 3;  // Try 3 times then back off
 sdmmc_card_t* sdcard = nullptr;
 wl_handle_t wl_handle;
 
@@ -46,7 +48,6 @@ static void safe_log(const char* message) {
 
 // Time sync notification callback
 static void time_sync_notification_cb(struct timeval *tv) {
-    ESP_LOGI(TAG, "Time synchronized");
     safe_log("Time synchronized");
 }
 
@@ -157,7 +158,7 @@ static void ftp_control_handler(bool start) {
             lv_unlock();
             
             char ftp_msg[64];
-            snprintf(ftp_msg, sizeof(ftp_msg), "User: %s | Port: 21", CONFIG_FTP_USER);
+            snprintf(ftp_msg, sizeof(ftp_msg), "User: %s Pass: %s | Port: 21", CONFIG_FTP_USER, CONFIG_FTP_PASSWORD);
             lv_lock();
             addLog(ftp_msg);
             lv_unlock();
@@ -243,7 +244,13 @@ extern "C" void app_main(void) {
     // Initialize internal flash storage (/data) and SD card (/sdcard)
     wl_handle = mountFATFS("data", "/data");
     if (wl_handle >= 0) has_storage = true;
-    if (mountSDCARD("/sdcard", &sdcard) == ESP_OK) has_storage = true;
+    if (mountSDCARD("/sdcard", &sdcard) == ESP_OK) {
+        has_storage = true;
+        sdcard_was_present = true;  // Mark SD card as present for hot-plug detection
+        lv_lock();
+        addLog("#00ff00 [OK] SD Card accessible#");
+        lv_unlock();
+    }
 
     if (!has_storage) {
         ESP_LOGE(TAG, "No storage available");
@@ -406,21 +413,68 @@ extern "C" void app_main(void) {
             last_ftp_state = ftp_state;
         }
 
-        if (iteration % 10 == 0 && sdcard) {
-            esp_err_t ret = sdmmc_get_status(sdcard);
+        // SD card hot-plug detection every 10 seconds
+        if (iteration % 10 == 0) {
+            esp_err_t ret = ESP_FAIL;
 
+            if (sdcard) {
+                ret = sdmmc_get_status(sdcard);
+            }
+
+            // Card was present but now removed/inaccessible
             if (ret != ESP_OK && sdcard_was_present) {
                 ESP_LOGW(TAG, "SD Card removed or inaccessible!");
                 lv_lock();
                 addLog("#ff8800 [!!] SD Card removed!#");
                 lv_unlock();
+
+                // Stop FTP server if running to prevent file corruption
+                if (ftpServer && ftpServer->isEnabled()) {
+                    ESP_LOGW(TAG, "Stopping FTP server due to SD card removal");
+                    ftpServer->stop();
+                    lv_lock();
+                    addLog("#ff8800 [!!] FTP stopped - SD removed#");
+                    update_status("Stopped");
+                    set_server_switch_state(false);
+                    lv_unlock();
+                }
+
+                // Unmount the stale card
+                if (sdcard) {
+                    unmountSDCARD("/sdcard", sdcard);
+                    sdcard = nullptr;
+                }
                 sdcard_was_present = false;
-            } else if (ret == ESP_OK && !sdcard_was_present) {
-                ESP_LOGI(TAG, "SD Card is accessible");
-                lv_lock();
-                addLog("#00ff00 [OK] SD Card accessible#");
-                lv_unlock();
-                sdcard_was_present = true;
+                sdcard_mount_retry_count = 0;  // Reset retry counter for next insertion
+
+            // Card wasn't present, try to mount it (with retry limit)
+            } else if (!sdcard_was_present) {
+                if (sdcard_mount_retry_count < MAX_SD_MOUNT_RETRIES) {
+                    // Attempt to mount SD card
+                    if (mountSDCARD("/sdcard", &sdcard) == ESP_OK) {
+                        ESP_LOGI(TAG, "SD Card is accessible");
+                        lv_lock();
+                        addLog("#00ff00 [OK] SD Card accessible#");
+                        lv_unlock();
+                        sdcard_was_present = true;
+                        sdcard_mount_retry_count = 0;  // Reset on success
+                    } else {
+                        sdcard_mount_retry_count++;
+                        if (sdcard_mount_retry_count >= MAX_SD_MOUNT_RETRIES) {
+                            ESP_LOGW(TAG, "SD Card mount failed %u times, backing off", MAX_SD_MOUNT_RETRIES);
+                            lv_lock();
+                            addLog("#ff8800 [!!] SD mount failed - check card#");
+                            lv_unlock();
+                        }
+                    }
+                } else {
+                    // Retry limit reached - check periodically if we should reset
+                    // Reset retry counter every 60 seconds to allow retry after user fixes issue
+                    if (iteration % 60 == 0) {
+                        ESP_LOGI(TAG, "Resetting SD card retry counter for next mount attempt");
+                        sdcard_mount_retry_count = 0;
+                    }
+                }
             }
         }
 
