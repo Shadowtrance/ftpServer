@@ -28,7 +28,7 @@ static const char* TAG = "[UI]";
     #define LOG_PANEL_TITLE_HEIGHT 30
     #define LOG_PANEL_PADDING 10
     #define LOG_PANEL_HEIGHT (SCREEN_HEIGHT - HEADER_HEIGHT_PX - INFO_BAR_HEIGHT_PX - LOG_PANEL_SPACING)
-    #define LOG_TEXTAREA_HEIGHT_PX (LOG_PANEL_HEIGHT - LOG_PANEL_TITLE_HEIGHT - LOG_PANEL_PADDING)
+    #define LOG_TEXTAREA_HEIGHT_PX (LOG_PANEL_HEIGHT - LOG_PANEL_TITLE_HEIGHT - LOG_PANEL_PADDING - 10)
     #define TITLE_FONT &lv_font_montserrat_28
     #define STATUS_FONT &lv_font_montserrat_18
     #define INFO_FONT &lv_font_montserrat_16
@@ -46,7 +46,7 @@ static const char* TAG = "[UI]";
     #define LOG_PANEL_TITLE_HEIGHT 20
     #define LOG_PANEL_PADDING 5
     #define LOG_PANEL_HEIGHT (SCREEN_HEIGHT - HEADER_HEIGHT_PX - INFO_BAR_HEIGHT_PX - LOG_PANEL_SPACING)
-    #define LOG_TEXTAREA_HEIGHT_PX (LOG_PANEL_HEIGHT - LOG_PANEL_TITLE_HEIGHT - LOG_PANEL_PADDING)
+    #define LOG_TEXTAREA_HEIGHT_PX (LOG_PANEL_HEIGHT - LOG_PANEL_TITLE_HEIGHT - LOG_PANEL_PADDING - 10)
     #define TITLE_FONT &lv_font_montserrat_20
     #define STATUS_FONT &lv_font_montserrat_16
     #define INFO_FONT &lv_font_montserrat_12
@@ -64,7 +64,7 @@ static const char* TAG = "[UI]";
     #define LOG_PANEL_TITLE_HEIGHT 15
     #define LOG_PANEL_PADDING 5
     #define LOG_PANEL_HEIGHT (SCREEN_HEIGHT - HEADER_HEIGHT_PX - INFO_BAR_HEIGHT_PX - LOG_PANEL_SPACING)
-    #define LOG_TEXTAREA_HEIGHT_PX (LOG_PANEL_HEIGHT - LOG_PANEL_TITLE_HEIGHT - LOG_PANEL_PADDING)
+    #define LOG_TEXTAREA_HEIGHT_PX (LOG_PANEL_HEIGHT - LOG_PANEL_TITLE_HEIGHT - LOG_PANEL_PADDING - 10)
     #define TITLE_FONT &lv_font_montserrat_16
     #define STATUS_FONT &lv_font_montserrat_14
     #define INFO_FONT &lv_font_montserrat_10
@@ -467,8 +467,8 @@ void create_screen_ftp(void) {
     // Log Panel (Main area)
     // ========================================
     lv_obj_t* log_panel = lv_obj_create(screen_ftp);
-    lv_obj_set_size(log_panel, SCREEN_WIDTH - 20, LOG_PANEL_HEIGHT);
-    lv_obj_align(log_panel, LV_ALIGN_TOP_MID, 0, HEADER_HEIGHT_PX + INFO_BAR_HEIGHT_PX + LOG_PANEL_SPACING);
+    lv_obj_set_size(log_panel, SCREEN_WIDTH, LOG_PANEL_HEIGHT + 5);
+    lv_obj_align(log_panel, LV_ALIGN_TOP_MID, 0, HEADER_HEIGHT_PX + INFO_BAR_HEIGHT_PX);
     lv_obj_set_style_bg_color(log_panel, lv_color_hex(UI_COLOR_BG_DARK), 0);
     lv_obj_set_style_border_color(log_panel, lv_color_hex(0x404040), 0);
     lv_obj_set_style_border_width(log_panel, 2, 0);
@@ -485,7 +485,7 @@ void create_screen_ftp(void) {
     
     // Log Textarea (scrollable - responsive)
     log_textarea = lv_textarea_create(log_panel);
-    lv_obj_set_size(log_textarea, SCREEN_WIDTH - 50, LOG_TEXTAREA_HEIGHT_PX);
+    lv_obj_set_size(log_textarea, SCREEN_WIDTH - 20, LOG_TEXTAREA_HEIGHT_PX);
     lv_obj_align(log_textarea, LV_ALIGN_TOP_MID, 0, LOG_PANEL_TITLE_HEIGHT);
     lv_textarea_set_text(log_textarea, "");
     lv_obj_set_style_bg_color(log_textarea, lv_color_hex(0x000000), 0);
