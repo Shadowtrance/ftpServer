@@ -1,5 +1,6 @@
-#include "ftpServer.h"
+#include "FtpServerCore.h"
 
+#include <atomic>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -9,7 +10,6 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <atomic>
 
 #include "dirent.h"
 #include "esp_log.h"
@@ -26,16 +26,38 @@ namespace FtpServer {
 static constexpr uint32_t FTP_LOG_THROTTLE_MS = 200;
 static constexpr uint32_t FTP_LOG_THROTTLE_MAX = 5;
 static constexpr uint32_t FTP_SEND_TIMEOUT_MS = 200;
-static constexpr uint32_t FTP_PROGRESS_INTERVAL = 100 * 1024;  // 100KB
+static constexpr uint32_t FTP_PROGRESS_INTERVAL = 100 * 1024; // 100KB
 static constexpr uint32_t FTP_DIR_ENTRY_MIN_SPACE = 64;
-static constexpr uint32_t FTP_TASK_STACK_SIZE = 1024 * 6;  // 6KB
+static constexpr uint32_t FTP_TASK_STACK_SIZE = 1024 * 6; // 6KB
 
 // Static member initialization
 const Server::ftp_cmd_t Server::ftp_cmd_table[] = {
-    {"FEAT"}, {"SYST"}, {"CDUP"}, {"CWD"},  {"PWD"},  {"XPWD"}, {"SIZE"},
-    {"MDTM"}, {"TYPE"}, {"USER"}, {"PASS"}, {"PASV"}, {"LIST"}, {"RETR"},
-    {"STOR"}, {"DELE"}, {"RMD"},  {"MKD"},  {"RNFR"}, {"RNTO"}, {"NOOP"},
-    {"QUIT"}, {"APPE"}, {"NLST"}, {"AUTH"}};
+    {"FEAT"},
+    {"SYST"},
+    {"CDUP"},
+    {"CWD"},
+    {"PWD"},
+    {"XPWD"},
+    {"SIZE"},
+    {"MDTM"},
+    {"TYPE"},
+    {"USER"},
+    {"PASS"},
+    {"PASV"},
+    {"LIST"},
+    {"RETR"},
+    {"STOR"},
+    {"DELE"},
+    {"RMD"},
+    {"MKD"},
+    {"RNFR"},
+    {"RNTO"},
+    {"NOOP"},
+    {"QUIT"},
+    {"APPE"},
+    {"NLST"},
+    {"AUTH"}
+};
 
 // Constructor
 Server::Server()
@@ -73,7 +95,7 @@ Server::~Server() {
 static uint32_t last_screen_log_ms = 0;
 static uint32_t screen_log_count = 0;
 
-static std::atomic<void (*)(const char*)> screen_log_callback{nullptr};
+static std::atomic<void (*)(const char*)> screen_log_callback {nullptr};
 
 void Server::register_screen_log_callback(void (*callback)(const char*)) {
     screen_log_callback.store(callback, std::memory_order_release);
@@ -117,7 +139,7 @@ void Server::translate_path(char* actual, size_t actual_size, const char* displa
         const char* suffix = display + internal_len;
         snprintf(actual, actual_size, "%s%s", VFS_NATIVE_INTERNAL_MP, suffix);
         return;
-        }
+    }
 
     // Check for /sdcard prefix
     const char* sd_prefix = "/" FTP_STORAGE_NAME_SDCARD;
@@ -153,8 +175,7 @@ uint64_t Server::mp_hal_ticks_ms() {
     return time_ms;
 }
 
-bool Server::add_virtual_dir_if_mounted(const char* mount_point, const char* name,
-                                         char* list, uint32_t maxlistsize, uint32_t* next) {
+bool Server::add_virtual_dir_if_mounted(const char* mount_point, const char* name, char* list, uint32_t maxlistsize, uint32_t* next) {
     DIR* test_dir = opendir(mount_point);
     if (test_dir == nullptr) return false;
     closedir(test_dir);
@@ -233,8 +254,7 @@ void Server::close_filesystem_on_error() {
     }
 }
 
-Server::ftp_result_t Server::read_file(char* filebuf, uint32_t desiredsize,
-                                       uint32_t* actualsize) {
+Server::ftp_result_t Server::read_file(char* filebuf, uint32_t desiredsize, uint32_t* actualsize) {
     ftp_result_t result = E_FTP_RESULT_CONTINUE;
     *actualsize = fread(filebuf, 1, desiredsize, ftp_data.fp);
     if (*actualsize == 0) {
@@ -289,11 +309,7 @@ int Server::get_eplf_item(char** dest, uint32_t* destsize, struct dirent* de) {
     const char* type = (de->d_type & DT_DIR) ? "d" : "-";
 
     char fullname[128];
-    int written = snprintf(fullname, sizeof(fullname), "%s%s%s%s",
-                           MOUNT_POINT,
-                           ftp_path,
-                           (ftp_path[strlen(ftp_path) - 1] != '/') ? "/" : "",
-                           de->d_name);
+    int written = snprintf(fullname, sizeof(fullname), "%s%s%s%s", MOUNT_POINT, ftp_path, (ftp_path[strlen(ftp_path) - 1] != '/') ? "/" : "", de->d_name);
     if (written >= (int)sizeof(fullname)) {
         ESP_LOGW(FTP_TAG, "Path too long in get_eplf_item, truncated");
     }
@@ -312,10 +328,10 @@ int Server::get_eplf_item(char** dest, uint32_t* destsize, struct dirent* de) {
     tm_info = localtime(&buf.st_mtime);
 
     if (tm_info != nullptr) {
-    if ((buf.st_mtime + FTP_UNIX_SECONDS_180_DAYS) < now)
-        strftime(str_time, sizeof(str_time), "%b %d %Y", tm_info);
-    else
-        strftime(str_time, sizeof(str_time), "%b %d %H:%M", tm_info);
+        if ((buf.st_mtime + FTP_UNIX_SECONDS_180_DAYS) < now)
+            strftime(str_time, sizeof(str_time), "%b %d %Y", tm_info);
+        else
+            strftime(str_time, sizeof(str_time), "%b %d %H:%M", tm_info);
     } else {
         snprintf(str_time, sizeof(str_time), "Jan  1  1970");
     }
@@ -327,14 +343,10 @@ int Server::get_eplf_item(char** dest, uint32_t* destsize, struct dirent* de) {
             addsize = snprintf(*dest, *destsize, "%s\r\n", de->d_name);
         else
             addsize =
-                snprintf(*dest, *destsize,
-                         "%srw-rw-rw-   1 root  root %9" PRIu32 " %s %s\r\n",
-                         type, (uint32_t)buf.st_size, str_time, de->d_name);
+                snprintf(*dest, *destsize, "%srw-rw-rw-   1 root  root %9" PRIu32 " %s %s\r\n", type, (uint32_t)buf.st_size, str_time, de->d_name);
 
         if (addsize >= *destsize) {
-            ESP_LOGW(FTP_TAG,
-                     "Buffer too small, reallocating [%d > %" PRIi32 "]",
-                     ftp_buff_size, ftp_buff_size + (addsize - *destsize) + 64);
+            ESP_LOGW(FTP_TAG, "Buffer too small, reallocating [%d > %" PRIi32 "]", ftp_buff_size, ftp_buff_size + (addsize - *destsize) + 64);
             char* new_dest =
                 (char*)realloc(*dest, ftp_buff_size + (addsize - *destsize) + 65);
             if (new_dest) {
@@ -357,10 +369,8 @@ Server::ftp_result_t Server::list_dir(char* list, uint32_t maxlistsize, uint32_t
     ftp_result_t result = E_FTP_RESULT_CONTINUE;
     if (ftp_data.listroot) {
         // Add virtual directories for mounted storage devices
-        add_virtual_dir_if_mounted(VFS_NATIVE_INTERNAL_MP, FTP_STORAGE_NAME_INTERNAL,
-                                    list, maxlistsize, &next);
-        add_virtual_dir_if_mounted(VFS_NATIVE_EXTERNAL_MP, FTP_STORAGE_NAME_SDCARD,
-                                    list, maxlistsize, &next);
+        add_virtual_dir_if_mounted(VFS_NATIVE_INTERNAL_MP, FTP_STORAGE_NAME_INTERNAL, list, maxlistsize, &next);
+        add_virtual_dir_if_mounted(VFS_NATIVE_EXTERNAL_MP, FTP_STORAGE_NAME_SDCARD, list, maxlistsize, &next);
         result = E_FTP_RESULT_OK;
     } else {
         struct dirent* de;
@@ -406,8 +416,7 @@ void Server::reset() {
     ftp_data.substate = E_FTP_STE_SUB_DISCONNECTED;
 }
 
-bool Server::create_listening_socket(int32_t* sd, uint32_t port,
-                                     uint8_t backlog) {
+bool Server::create_listening_socket(int32_t* sd, uint32_t port, uint8_t backlog) {
     struct sockaddr_in sServerAddress;
     int32_t _sd;
     int32_t result;
@@ -429,8 +438,7 @@ bool Server::create_listening_socket(int32_t* sd, uint32_t port,
         sServerAddress.sin_len = sizeof(sServerAddress);
         sServerAddress.sin_port = htons(port);
 
-        result |= bind(_sd, (const struct sockaddr*)&sServerAddress,
-                       sizeof(sServerAddress));
+        result |= bind(_sd, (const struct sockaddr*)&sServerAddress, sizeof(sServerAddress));
         result |= listen(_sd, backlog);
 
         if (!result) {
@@ -441,13 +449,11 @@ bool Server::create_listening_socket(int32_t* sd, uint32_t port,
     return false;
 }
 
-Server::ftp_result_t Server::wait_for_connection(int32_t l_sd, int32_t* n_sd,
-                                                 uint32_t* ip_addr) {
+Server::ftp_result_t Server::wait_for_connection(int32_t l_sd, int32_t* n_sd, uint32_t* ip_addr) {
     struct sockaddr_in sClientAddress;
     socklen_t in_addrSize;
 
-    *n_sd = accept(l_sd, (struct sockaddr*)&sClientAddress,
-                   (socklen_t*)&in_addrSize);
+    *n_sd = accept(l_sd, (struct sockaddr*)&sClientAddress, (socklen_t*)&in_addrSize);
     int32_t _sd = *n_sd;
     if (_sd < 0) {
         if (errno == EAGAIN) {
@@ -460,14 +466,10 @@ Server::ftp_result_t Server::wait_for_connection(int32_t l_sd, int32_t* n_sd,
     if (ip_addr) {
         struct sockaddr_in clientAddr, serverAddr;
         in_addrSize = sizeof(struct sockaddr_in);
-        getpeername(_sd, (struct sockaddr*)&clientAddr,
-                    (socklen_t*)&in_addrSize);
-        getsockname(_sd, (struct sockaddr*)&serverAddr,
-                    (socklen_t*)&in_addrSize);
-        ESP_LOGI(FTP_TAG, "Client IP: 0x%08" PRIx32,
-                 clientAddr.sin_addr.s_addr);
-        ESP_LOGI(FTP_TAG, "Server IP: 0x%08" PRIx32,
-                 serverAddr.sin_addr.s_addr);
+        getpeername(_sd, (struct sockaddr*)&clientAddr, (socklen_t*)&in_addrSize);
+        getsockname(_sd, (struct sockaddr*)&serverAddr, (socklen_t*)&in_addrSize);
+        ESP_LOGI(FTP_TAG, "Client IP: 0x%08" PRIx32, clientAddr.sin_addr.s_addr);
+        ESP_LOGI(FTP_TAG, "Server IP: 0x%08" PRIx32, serverAddr.sin_addr.s_addr);
         *ip_addr = serverAddr.sin_addr.s_addr;
     }
 
@@ -574,8 +576,7 @@ void Server::send_file_data(uint32_t datasize) {
     }
 }
 
-Server::ftp_result_t Server::recv_non_blocking(int32_t sd, void* buff,
-                                               int32_t Maxlen, int32_t* rxLen) {
+Server::ftp_result_t Server::recv_non_blocking(int32_t sd, void* buff, int32_t Maxlen, int32_t* rxLen) {
     if (sd < 0) return E_FTP_RESULT_FAILED;
 
     *rxLen = recv(sd, buff, Maxlen, 0);
@@ -607,8 +608,8 @@ void Server::open_child(char* pwd, char* dir) {
             }
             // append directory/file name
             strncat(pwd, dir, FTP_MAX_PARAM_SIZE - pwd_len - 1);
-            }
         }
+    }
     ESP_LOGD(FTP_TAG, "open_child, New pwd: %s", pwd);
 }
 
@@ -618,27 +619,24 @@ void Server::close_child(char* pwd) {
     // Remove last path component
     uint len = strlen(pwd);
 
-    // Handle trailing slash
-    if (pwd[len - 1] == '/') {
+    // Handle trailing slash first
+    if (len > 1 && pwd[len - 1] == '/') {
         pwd[len - 1] = '\0';
         len--;
-        if((len == 0) || (strcmp(pwd, VFS_NATIVE_INTERNAL_MP) == 0)) {
-            pwd[0] = '/';
-            pwd[1] = '\0';
-    }
-    } else {
-        while (len) {
-        if (pwd[len - 1] == '/') {
-                pwd[len - 1] = '\0';
-                len--;
-            break;
-        }
-        len--;
-    }
     }
 
-    // If no slash found, we're at root
-    if (len == 0) {
+    // Now find and remove the last path component
+    // Walk backwards to find the previous '/'
+    while (len > 1) {
+        len--;
+        if (pwd[len] == '/') {
+            pwd[len] = '\0';
+            break;
+        }
+    }
+
+    // If we're at a top-level directory like "/sdcard" or "/data", go to root
+    if (len <= 1 || pwd[0] != '/' || strchr(pwd + 1, '/') == nullptr) {
         pwd[0] = '/';
         pwd[1] = '\0';
     }
@@ -656,8 +654,7 @@ void Server::remove_fname_from_path(char* pwd, char* fname) {
 }
 
 // Command parsing
-void Server::pop_param(char** str, char* param, size_t maxlen,
-                       bool stop_on_space, bool stop_on_newline) {
+void Server::pop_param(char** str, char* param, size_t maxlen, bool stop_on_space, bool stop_on_newline) {
     char lastc = '\0';
     size_t copied = 0;
     bool in_quotes = false;
@@ -668,13 +665,13 @@ void Server::pop_param(char** str, char* param, size_t maxlen,
     // Check if parameter is quoted
     if (**str == '"') {
         in_quotes = true;
-        (*str)++;  // Skip opening quote
+        (*str)++; // Skip opening quote
     }
 
     while (**str != '\0') {
         // Handle closing quote
         if (in_quotes && **str == '"') {
-            (*str)++;  // Skip closing quote
+            (*str)++; // Skip closing quote
             break;
         }
 
@@ -738,8 +735,7 @@ void Server::process_cmd() {
     memset(bufptr, 0, FTP_MAX_PARAM_SIZE + FTP_CMD_SIZE_MAX);
     ftp_data.closechild = false;
 
-    result = recv_non_blocking(ftp_data.c_sd, ftp_cmd_buffer,
-                               FTP_MAX_PARAM_SIZE + FTP_CMD_SIZE_MAX, &len);
+    result = recv_non_blocking(ftp_data.c_sd, ftp_cmd_buffer, FTP_MAX_PARAM_SIZE + FTP_CMD_SIZE_MAX, &len);
     if (result == E_FTP_RESULT_FAILED) {
         ESP_LOGI(FTP_TAG, "Client disconnected");
         close_cmd_data();
@@ -783,8 +779,7 @@ void Server::process_cmd() {
                 send_reply(250, nullptr);
                 break;
             case E_FTP_CMD_CWD:
-                pop_param(&bufptr, ftp_scratch_buffer, FTP_MAX_PARAM_SIZE,
-                          false, true);  // Don't stop on space, DO stop on newline
+                pop_param(&bufptr, ftp_scratch_buffer, FTP_MAX_PARAM_SIZE, false, true); // Don't stop on space, DO stop on newline
                 if (strlen(ftp_scratch_buffer) > 0) {
                     if ((ftp_scratch_buffer[0] == '.') &&
                         (ftp_scratch_buffer[1] == '\0')) {
@@ -834,13 +829,11 @@ void Server::process_cmd() {
                 get_param_and_open_child(&bufptr);
                 char actual_path_size[128];
                 translate_path(actual_path_size, sizeof(actual_path_size), ftp_path);
-                snprintf(fullname, sizeof(fullname), "%s%s", MOUNT_POINT,
-                         actual_path_size);
+                snprintf(fullname, sizeof(fullname), "%s%s", MOUNT_POINT, actual_path_size);
                 ESP_LOGI(FTP_TAG, "E_FTP_CMD_SIZE fullname=[%s]", fullname);
                 int res = stat(fullname, &buf);
                 if (res == 0) {
-                    snprintf((char*)ftp_data.dBuffer, ftp_buff_size, "%" PRIu32,
-                             (uint32_t)buf.st_size);
+                    snprintf((char*)ftp_data.dBuffer, ftp_buff_size, "%" PRIu32, (uint32_t)buf.st_size);
                     send_reply(213, (char*)ftp_data.dBuffer);
                 } else {
                     send_reply(550, nullptr);
@@ -850,17 +843,14 @@ void Server::process_cmd() {
                 get_param_and_open_child(&bufptr);
                 char actual_path_mdtm[128];
                 translate_path(actual_path_mdtm, sizeof(actual_path_mdtm), ftp_path);
-                snprintf(fullname, sizeof(fullname), "%s%s", MOUNT_POINT,
-                         actual_path_mdtm);
+                snprintf(fullname, sizeof(fullname), "%s%s", MOUNT_POINT, actual_path_mdtm);
                 ESP_LOGI(FTP_TAG, "E_FTP_CMD_MDTM fullname=[%s]", fullname);
                 res = stat(fullname, &buf);
                 if (res == 0) {
                     time_t time = buf.st_mtime;
                     struct tm* ptm = localtime(&time);
-                    strftime((char*)ftp_data.dBuffer, ftp_buff_size,
-                             "%Y%m%d%H%M%S", ptm);
-                    ESP_LOGI(FTP_TAG, "E_FTP_CMD_MDTM ftp_data.dBuffer=[%s]",
-                             ftp_data.dBuffer);
+                    strftime((char*)ftp_data.dBuffer, ftp_buff_size, "%Y%m%d%H%M%S", ptm);
+                    ESP_LOGI(FTP_TAG, "E_FTP_CMD_MDTM ftp_data.dBuffer=[%s]", ftp_data.dBuffer);
                     send_reply(213, (char*)ftp_data.dBuffer);
                 } else {
                     send_reply(550, nullptr);
@@ -870,28 +860,24 @@ void Server::process_cmd() {
                 send_reply(200, nullptr);
                 break;
             case E_FTP_CMD_USER:
-                pop_param(&bufptr, ftp_scratch_buffer, FTP_MAX_PARAM_SIZE, true,
-                          true);
+                pop_param(&bufptr, ftp_scratch_buffer, FTP_MAX_PARAM_SIZE, true, true);
                 {
                     size_t user_len = strlen(ftp_user);
                     size_t input_len = strlen(ftp_scratch_buffer);
                     if (user_len == input_len && user_len > 0 &&
-                        secure_compare(ftp_scratch_buffer, ftp_user,
-                                       user_len)) {
+                        secure_compare(ftp_scratch_buffer, ftp_user, user_len)) {
                         ftp_data.loggin.uservalid = true;
                     }
                 }
                 send_reply(331, nullptr);
                 break;
             case E_FTP_CMD_PASS:
-                pop_param(&bufptr, ftp_scratch_buffer, FTP_MAX_PARAM_SIZE, true,
-                          true);
+                pop_param(&bufptr, ftp_scratch_buffer, FTP_MAX_PARAM_SIZE, true, true);
                 {
                     size_t pass_len = strlen(ftp_pass);
                     size_t input_len = strlen(ftp_scratch_buffer);
                     if (ftp_data.loggin.uservalid && pass_len == input_len &&
-                        secure_compare(ftp_scratch_buffer, ftp_pass,
-                                       pass_len)) {
+                        secure_compare(ftp_scratch_buffer, ftp_pass, pass_len)) {
                         ftp_data.loggin.passvalid = true;
                         if (ftp_data.loggin.passvalid) {
                             send_reply(230, nullptr);
@@ -910,15 +896,13 @@ void Server::process_cmd() {
                 if (ftp_data.ld_sd < 0) {
                     socketcreated = create_listening_socket(
                         &ftp_data.ld_sd, FTP_PASSIVE_DATA_PORT,
-                        FTP_DATA_CLIENTS_MAX - 1);
+                        FTP_DATA_CLIENTS_MAX - 1
+                    );
                 }
                 if (socketcreated) {
                     uint8_t* pip = (uint8_t*)&ftp_data.ip_addr;
                     ftp_data.dtimeout = 0;
-                    snprintf((char*)ftp_data.dBuffer, ftp_buff_size,
-                             "(%u,%u,%u,%u,%u,%u)", pip[0], pip[1], pip[2],
-                             pip[3], (FTP_PASSIVE_DATA_PORT >> 8),
-                             (FTP_PASSIVE_DATA_PORT & 0xFF));
+                    snprintf((char*)ftp_data.dBuffer, ftp_buff_size, "(%u,%u,%u,%u,%u,%u)", pip[0], pip[1], pip[2], pip[3], (FTP_PASSIVE_DATA_PORT >> 8), (FTP_PASSIVE_DATA_PORT & 0xFF));
                     ftp_data.substate = E_FTP_STE_SUB_LISTEN_FOR_DATA;
                     ESP_LOGI(FTP_TAG, "Data socket created");
                     send_reply(227, (char*)ftp_data.dBuffer);
@@ -1009,8 +993,7 @@ void Server::process_cmd() {
                     ESP_LOGI(FTP_TAG, "E_FTP_CMD_DELE ftp_path=[%s]", ftp_path);
                     char actual_path_dele[128];
                     translate_path(actual_path_dele, sizeof(actual_path_dele), ftp_path);
-                    snprintf(fullname, sizeof(fullname), "%s%s", MOUNT_POINT,
-                             actual_path_dele);
+                    snprintf(fullname, sizeof(fullname), "%s%s", MOUNT_POINT, actual_path_dele);
                     ESP_LOGI(FTP_TAG, "E_FTP_CMD_DELE fullname=[%s]", fullname);
                     if (unlink(fullname) == 0) {
                         vTaskDelay(20 / portTICK_PERIOD_MS);
@@ -1029,8 +1012,7 @@ void Server::process_cmd() {
                     ESP_LOGI(FTP_TAG, "E_FTP_CMD_RMD ftp_path=[%s]", ftp_path);
                     char actual_path_rmd[128];
                     translate_path(actual_path_rmd, sizeof(actual_path_rmd), ftp_path);
-                    snprintf(fullname, sizeof(fullname), "%s%s", MOUNT_POINT,
-                             actual_path_rmd);
+                    snprintf(fullname, sizeof(fullname), "%s%s", MOUNT_POINT, actual_path_rmd);
                     ESP_LOGI(FTP_TAG, "E_FTP_CMD_RMD fullname=[%s]", fullname);
                     if (rmdir(fullname) == 0) {
                         vTaskDelay(20 / portTICK_PERIOD_MS);
@@ -1049,8 +1031,7 @@ void Server::process_cmd() {
                     ESP_LOGI(FTP_TAG, "E_FTP_CMD_MKD ftp_path=[%s]", ftp_path);
                     char actual_path_mkd[128];
                     translate_path(actual_path_mkd, sizeof(actual_path_mkd), ftp_path);
-                    snprintf(fullname, sizeof(fullname), "%s%s", MOUNT_POINT,
-                             actual_path_mkd);
+                    snprintf(fullname, sizeof(fullname), "%s%s", MOUNT_POINT, actual_path_mkd);
                     ESP_LOGI(FTP_TAG, "E_FTP_CMD_MKD fullname=[%s]", fullname);
                     if (mkdir(fullname, 0755) == 0) {
                         vTaskDelay(20 / portTICK_PERIOD_MS);
@@ -1068,8 +1049,7 @@ void Server::process_cmd() {
                 {
                     char actual_path_rnfr[128];
                     translate_path(actual_path_rnfr, sizeof(actual_path_rnfr), ftp_path);
-                    snprintf(fullname, sizeof(fullname), "%s%s", MOUNT_POINT,
-                             actual_path_rnfr);
+                    snprintf(fullname, sizeof(fullname), "%s%s", MOUNT_POINT, actual_path_rnfr);
                     ESP_LOGI(FTP_TAG, "E_FTP_CMD_RNFR fullname=[%s]", fullname);
                     res = stat(fullname, &buf);
                     if (res == 0) {
@@ -1083,9 +1063,7 @@ void Server::process_cmd() {
                 break;
             case E_FTP_CMD_RNTO:
                 get_param_and_open_child(&bufptr);
-                ESP_LOGI(FTP_TAG,
-                         "E_FTP_CMD_RNTO ftp_path=[%s], ftp_data.dBuffer=[%s]",
-                         ftp_path, (char*)ftp_data.dBuffer);
+                ESP_LOGI(FTP_TAG, "E_FTP_CMD_RNTO ftp_path=[%s], ftp_data.dBuffer=[%s]", ftp_path, (char*)ftp_data.dBuffer);
                 {
                     char actual_old[128];
                     translate_path(actual_old, sizeof(actual_old), (char*)ftp_data.dBuffer);
@@ -1096,11 +1074,9 @@ void Server::process_cmd() {
                     translate_path(actual_new, sizeof(actual_new), ftp_path);
                     strcpy(fullname2, MOUNT_POINT);
                     strcat(fullname2, actual_new);
-                    ESP_LOGI(FTP_TAG, "E_FTP_CMD_RNTO fullname2=[%s]",
-                             fullname2);
+                    ESP_LOGI(FTP_TAG, "E_FTP_CMD_RNTO fullname2=[%s]", fullname2);
                     if (rename(fullname, fullname2) == 0) {
-                        ESP_LOGI(FTP_TAG, "File renamed from %s to %s",
-                                 (char*)ftp_data.dBuffer, ftp_path);
+                        ESP_LOGI(FTP_TAG, "File renamed from %s to %s", (char*)ftp_data.dBuffer, ftp_path);
                         send_reply(250, nullptr);
                     } else {
                         send_reply(550, nullptr);
@@ -1216,17 +1192,14 @@ int Server::run(uint32_t elapsed) {
             wait_for_enabled();
             break;
         case E_FTP_STE_START:
-            if (create_listening_socket(&ftp_data.lc_sd, FTP_CMD_PORT,
-                                        FTP_CMD_CLIENTS_MAX - 1)) {
+            if (create_listening_socket(&ftp_data.lc_sd, FTP_CMD_PORT, FTP_CMD_CLIENTS_MAX - 1)) {
                 ftp_data.state = E_FTP_STE_READY;
             }
             break;
         case E_FTP_STE_READY:
             if (ftp_data.c_sd < 0 &&
                 ftp_data.substate == E_FTP_STE_SUB_DISCONNECTED) {
-                if (E_FTP_RESULT_OK == wait_for_connection(ftp_data.lc_sd,
-                                                           &ftp_data.c_sd,
-                                                           &ftp_data.ip_addr)) {
+                if (E_FTP_RESULT_OK == wait_for_connection(ftp_data.lc_sd, &ftp_data.c_sd, &ftp_data.ip_addr)) {
                     ftp_data.txRetries = 0;
                     ftp_data.logginRetries = 0;
                     ftp_data.ctimeout = 0;
@@ -1276,8 +1249,7 @@ int Server::run(uint32_t elapsed) {
                 if (readsize > 0) {
                     send_file_data(readsize);
                     ftp_data.total += readsize;
-                    ESP_LOGI(FTP_TAG, "Sent %" PRIu32 ", total: %" PRIu32,
-                             readsize, ftp_data.total);
+                    ESP_LOGI(FTP_TAG, "Sent %" PRIu32 ", total: %" PRIu32, readsize, ftp_data.total);
                     if (ftp_data.total % 102400 == 0 && ftp_data.total > 0) {
                         log_to_screen("[^^] Progress: %" PRIu32 " KB", ftp_data.total / 1024);
                     }
@@ -1285,10 +1257,7 @@ int Server::run(uint32_t elapsed) {
                 if (result == E_FTP_RESULT_OK) {
                     send_reply(226, nullptr);
                     ftp_data.state = E_FTP_STE_END_TRANSFER;
-                    ESP_LOGI(FTP_TAG,
-                             "File sent (%" PRIu32 " bytes in %" PRIu32
-                             " msec).",
-                             ftp_data.total, ftp_data.time);
+                    ESP_LOGI(FTP_TAG, "File sent (%" PRIu32 " bytes in %" PRIu32 " msec).", ftp_data.total, ftp_data.time);
                 }
             }
         } break;
@@ -1296,8 +1265,7 @@ int Server::run(uint32_t elapsed) {
             int32_t len;
             ftp_result_t result = E_FTP_RESULT_OK;
             ESP_LOGI(FTP_TAG, "ftp_buff_size=%d", ftp_buff_size);
-            result = recv_non_blocking(ftp_data.d_sd, ftp_data.dBuffer,
-                                       ftp_buff_size, &len);
+            result = recv_non_blocking(ftp_data.d_sd, ftp_data.dBuffer, ftp_buff_size, &len);
             if (result == E_FTP_RESULT_OK) {
                 ftp_data.dtimeout = 0;
                 ftp_data.ctimeout = 0;
@@ -1308,8 +1276,7 @@ int Server::run(uint32_t elapsed) {
                     ESP_LOGW(FTP_TAG, "Error writing to file");
                 } else {
                     ftp_data.total += len;
-                    ESP_LOGI(FTP_TAG, "Received %" PRIu32 ", total: %" PRIu32,
-                             len, ftp_data.total);
+                    ESP_LOGI(FTP_TAG, "Received %" PRIu32 ", total: %" PRIu32, len, ftp_data.total);
                     if (ftp_data.total % 102400 == 0 && ftp_data.total > 0) {
                         log_to_screen("[^^] Progress: %" PRIu32 " KB", ftp_data.total / 1024);
                     }
@@ -1325,10 +1292,7 @@ int Server::run(uint32_t elapsed) {
                 close_files_dir();
                 send_reply(226, nullptr);
                 ftp_data.state = E_FTP_STE_END_TRANSFER;
-                ESP_LOGI(FTP_TAG,
-                         "File received (%" PRIu32 " bytes in %" PRIu32
-                         " msec).",
-                         ftp_data.total, ftp_data.time);
+                ESP_LOGI(FTP_TAG, "File received (%" PRIu32 " bytes in %" PRIu32 " msec).", ftp_data.total, ftp_data.time);
                 break;
             }
         } break;
@@ -1345,9 +1309,7 @@ int Server::run(uint32_t elapsed) {
                 ftp_data.dtimeout = 0;
                 ftp_data.substate = E_FTP_STE_SUB_DATA_CONNECTED;
             } else if (ftp_data.dtimeout > FTP_DATA_TIMEOUT_MS) {
-                ESP_LOGW(FTP_TAG,
-                         "Waiting for data connection timeout (%" PRIi32 ")",
-                         ftp_data.dtimeout);
+                ESP_LOGW(FTP_TAG, "Waiting for data connection timeout (%" PRIi32 ")", ftp_data.dtimeout);
                 ftp_data.dtimeout = 0;
                 closesocket(ftp_data.ld_sd);
                 ftp_data.ld_sd = -1;
@@ -1414,11 +1376,15 @@ bool Server::stop_requested() { return (ftp_stop == 1); }
 // Task loop - the main FTP server loop running in FreeRTOS task
 void Server::task_loop() {
     ESP_LOGI(FTP_TAG, "ftp_task start");
-    esp_log_level_set(FTP_TAG, ESP_LOG_INFO);
-    strncpy(ftp_user, CONFIG_FTP_USER, FTP_USER_PASS_LEN_MAX);
-    ftp_user[FTP_USER_PASS_LEN_MAX] = '\0';
-    strncpy(ftp_pass, CONFIG_FTP_PASSWORD, FTP_USER_PASS_LEN_MAX);
-    ftp_pass[FTP_USER_PASS_LEN_MAX] = '\0';
+    // Use default credentials if not set
+    if (ftp_user[0] == '\0') {
+        strncpy(ftp_user, "ftp", FTP_USER_PASS_LEN_MAX);
+        ftp_user[FTP_USER_PASS_LEN_MAX] = '\0';
+    }
+    if (ftp_pass[0] == '\0') {
+        strncpy(ftp_pass, "ftp123", FTP_USER_PASS_LEN_MAX);
+        ftp_pass[FTP_USER_PASS_LEN_MAX] = '\0';
+    }
     ESP_LOGI(FTP_TAG, "ftp_user:[%s] ftp_pass:[%s]", ftp_user, ftp_pass);
 
     uint64_t elapsed, time_ms = mp_hal_ticks_ms();
@@ -1460,7 +1426,7 @@ void Server::task_loop() {
 
     ESP_LOGW(FTP_TAG, "Task terminating, cleaning up...");
     // Cleanup before exit
-    reset();  // Close all sockets
+    reset(); // Close all sockets
     deinit(); // Free memory
 
     ESP_LOGW(FTP_TAG, "Task terminated!");
@@ -1551,11 +1517,11 @@ void Server::stop() {
 
     // Wait for task to finish with timeout
     EventBits_t bits = xEventGroupWaitBits(
-        xEventTask, 
-        FTP_TASK_FINISH_BIT, 
-        pdFALSE, 
-        pdFALSE, 
-        pdMS_TO_TICKS(5000)  // 5 second timeout
+        xEventTask,
+        FTP_TASK_FINISH_BIT,
+        pdFALSE,
+        pdFALSE,
+        pdMS_TO_TICKS(5000) // 5 second timeout
     );
 
     if (bits & FTP_TASK_FINISH_BIT) {
@@ -1584,6 +1550,8 @@ void Server::stop() {
         xEventTask = nullptr;
     }
     ftp_task_handle = nullptr;
+    ftp_data.enabled = false; // Clear enabled flag so isEnabled() returns false
+    ftp_stop = 0; // Reset stop flag for next start
 
     if (ftp_mutex) {
         xSemaphoreGive(ftp_mutex);
@@ -1592,7 +1560,7 @@ void Server::stop() {
     ESP_LOGI(FTP_TAG, "stop() completed");
 }
 
-bool Server::isEnabled() const { 
+bool Server::isEnabled() const {
     bool enabled = false;
     if (ftp_mutex) {
         xSemaphoreTake(ftp_mutex, portMAX_DELAY);
@@ -1620,4 +1588,26 @@ int Server::getState() const {
     return fstate;
 }
 
-}  // namespace FtpServer
+void Server::setCredentials(const char* username, const char* password) {
+    if (ftp_mutex) {
+        xSemaphoreTake(ftp_mutex, portMAX_DELAY);
+    }
+
+    if (username) {
+        strncpy(ftp_user, username, FTP_USER_PASS_LEN_MAX);
+        ftp_user[FTP_USER_PASS_LEN_MAX] = '\0';
+    }
+
+    if (password) {
+        strncpy(ftp_pass, password, FTP_USER_PASS_LEN_MAX);
+        ftp_pass[FTP_USER_PASS_LEN_MAX] = '\0';
+    }
+
+    if (ftp_mutex) {
+        xSemaphoreGive(ftp_mutex);
+    }
+
+    ESP_LOGI(FTP_TAG, "Credentials updated - user:[%s] pass:[%s]", ftp_user, ftp_pass);
+}
+
+} // namespace FtpServer
