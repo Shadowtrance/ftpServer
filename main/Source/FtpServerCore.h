@@ -25,6 +25,8 @@ namespace FtpServer {
 #define FTP_USER_PASS_LEN_MAX 32
 #define FTP_CMD_TIMEOUT_MS (300 * 1000)
 #define FTPSERVER_BUFFER_SIZE 1024
+#define FTPSERVER_MAX_BUFFER_SIZE (16 * 1024)  // Maximum buffer growth cap (16KB)
+#define FTP_MAX_PATH_SIZE 256  // Safe maximum path size for all operations
 
 #define VFS_NATIVE_INTERNAL_MP "/data"
 #define VFS_NATIVE_EXTERNAL_MP "/sdcard"
