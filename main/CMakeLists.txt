@@ -1,9 +1,13 @@
-idf_component_register(SRCS "main.cpp"
-                            "filesystem.cpp"
-                            "ftpServer.cpp"
-                            "ftpUiScreen.cpp"
-                            "spinner_img.c"
-                            "displayConfig.cpp"
-                       INCLUDE_DIRS "."
-                       REQUIRES lvgl esp_lcd esp_lcd_touch_gt911 esp_lvgl_port fatfs driver
-                       PRIV_REQUIRES esp_wifi nvs_flash esp_netif)
+file(GLOB_RECURSE SOURCE_FILES
+    Source/*.c*
+)
+
+idf_component_register(
+    SRCS ${SOURCE_FILES}
+    # Library headers must be included directly,
+    # because all regular dependencies get stripped by elf_loader's cmake script
+    INCLUDE_DIRS ../../../Libraries/TactilityCpp/Include
+    REQUIRES TactilitySDK
+    PRIV_REQUIRES esp_wifi esp_netif
+)
+

@@ -1,6 +1,16 @@
-# The following lines of boilerplate have to be in your project's CMakeLists
-# in this exact order for cmake to work correctly
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.20)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(ftpServer)
+
+if (DEFINED ENV{TACTILITY_SDK_PATH})
+    set(TACTILITY_SDK_PATH $ENV{TACTILITY_SDK_PATH})
+else()
+    set(TACTILITY_SDK_PATH "../../release/TactilitySDK")
+    message(WARNING "⚠️ TACTILITY_SDK_PATH environment variable is not set, defaulting to ${TACTILITY_SDK_PATH}")
+endif()
+
+include("${TACTILITY_SDK_PATH}/TactilitySDK.cmake")
+set(EXTRA_COMPONENT_DIRS ${TACTILITY_SDK_PATH})
+
+project(FTPServer)
+tactility_project(FTPServer)
