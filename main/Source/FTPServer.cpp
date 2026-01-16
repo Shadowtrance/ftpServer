@@ -40,7 +40,45 @@ static int ftpPort = DEFAULT_FTP_PORT;
 
 constexpr auto* KEY_FTPSERVER_USER = "username";
 constexpr auto* KEY_FTPSERVER_PASS = "password";
+constexpr auto* KEY_FTPSERVER_PASS_ENC = "password_enc";
 constexpr auto* KEY_FTPSERVER_PORT = "port";
+
+// Simple XOR key for password obfuscation (not cryptographically secure, but prevents casual reading)
+static constexpr uint8_t XOR_KEY[] = {0x5A, 0x3C, 0x7E, 0x1D, 0x9B, 0x4F, 0x2A, 0x6E};
+static constexpr size_t XOR_KEY_LEN = sizeof(XOR_KEY);
+
+// Encode password to hex string with XOR obfuscation
+static void encodePassword(const char* plain, char* encoded, size_t encodedSize) {
+    size_t len = strlen(plain);
+    size_t outIdx = 0;
+
+    for (size_t i = 0; i < len && outIdx + 2 < encodedSize; i++) {
+        uint8_t obfuscated = static_cast<uint8_t>(plain[i]) ^ XOR_KEY[i % XOR_KEY_LEN];
+        snprintf(encoded + outIdx, 3, "%02X", obfuscated);
+        outIdx += 2;
+    }
+    encoded[outIdx] = '\0';
+}
+
+// Decode hex string with XOR obfuscation back to password
+static bool decodePassword(const char* encoded, char* plain, size_t plainSize) {
+    size_t len = strlen(encoded);
+    if (len % 2 != 0) {
+        return false;
+    }
+
+    size_t outIdx = 0;
+    for (size_t i = 0; i < len && outIdx + 1 < plainSize; i += 2) {
+        unsigned int byte;
+        if (sscanf(encoded + i, "%02X", &byte) != 1) {
+            return false;
+        }
+        plain[outIdx] = static_cast<char>(static_cast<uint8_t>(byte) ^ XOR_KEY[outIdx % XOR_KEY_LEN]);
+        outIdx++;
+    }
+    plain[outIdx] = '\0';
+    return true;
+}
 
 // App handle for settings path
 static AppHandle currentAppHandle = nullptr;
@@ -130,7 +168,10 @@ static bool saveSettings() {
     FILE* file = fopen(path, "w");
     if (file != nullptr) {
         fprintf(file, "%s=%s\n", KEY_FTPSERVER_USER, ftpUsername);
-        fprintf(file, "%s=%s\n", KEY_FTPSERVER_PASS, ftpPassword);
+        // Store password as obfuscated hex instead of plaintext
+        char encodedPass[128];
+        encodePassword(ftpPassword, encodedPass, sizeof(encodedPass));
+        fprintf(file, "%s=%s\n", KEY_FTPSERVER_PASS_ENC, encodedPass);
         fprintf(file, "%s=%d\n", KEY_FTPSERVER_PORT, ftpPort);
         fclose(file);
         ESP_LOGI(TAG, "Settings saved to %s", path);
@@ -153,6 +194,9 @@ static bool loadSettings() {
         return false;
     }
 
+    bool foundPlaintextPassword = false;
+    bool foundEncodedPassword = false;
+
     char line[256];
     while (fgets(line, sizeof(line), file)) {
         if (line[0] == '\0' || line[0] == '#' || line[0] == '\n' || line[0] == '\r') {
@@ -173,9 +217,18 @@ static bool loadSettings() {
             if (strcmp(key, KEY_FTPSERVER_USER) == 0) {
                 strncpy(ftpUsername, value, sizeof(ftpUsername) - 1);
                 ftpUsername[sizeof(ftpUsername) - 1] = '\0';
+            } else if (strcmp(key, KEY_FTPSERVER_PASS_ENC) == 0) {
+                // Decode obfuscated password
+                if (decodePassword(value, ftpPassword, sizeof(ftpPassword))) {
+                    foundEncodedPassword = true;
+                }
             } else if (strcmp(key, KEY_FTPSERVER_PASS) == 0) {
-                strncpy(ftpPassword, value, sizeof(ftpPassword) - 1);
-                ftpPassword[sizeof(ftpPassword) - 1] = '\0';
+                // Legacy plaintext password - migrate it
+                if (!foundEncodedPassword) {
+                    strncpy(ftpPassword, value, sizeof(ftpPassword) - 1);
+                    ftpPassword[sizeof(ftpPassword) - 1] = '\0';
+                    foundPlaintextPassword = true;
+                }
             } else if (strcmp(key, KEY_FTPSERVER_PORT) == 0) {
                 int port = atoi(value);
                 if (port > 0 && port <= 65535) {
@@ -185,6 +238,13 @@ static bool loadSettings() {
         }
     }
     fclose(file);
+
+    // Migrate: if we found a plaintext password, re-save with encoded password
+    if (foundPlaintextPassword && !foundEncodedPassword) {
+        ESP_LOGI(TAG, "Migrating plaintext password to encoded format");
+        saveSettings();
+    }
+
     ESP_LOGI(TAG, "Settings loaded: user=%s, port=%d", ftpUsername, ftpPort);
     return true;
 }
@@ -315,11 +375,16 @@ void FTPServer::onClearLogButtonCallback(lv_event_t* event) {
 // Timer callback to check FTP server status after start
 static void ftpStartCheckTimerCallback(lv_timer_t* timer) {
     auto* app = static_cast<FTPServer*>(lv_timer_get_user_data(timer));
-    app->checkFtpServerStarted();
+    if (app != nullptr) {
+        app->checkFtpServerStarted();
+    }
     lv_timer_delete(timer);
 }
 
 void FTPServer::checkFtpServerStarted() {
+    // Clear the timer pointer since we're being called (timer will be deleted after this)
+    ftpStartCheckTimer = nullptr;
+
     if (ftpServer && ftpServer->isEnabled()) {
         mainView.updateInfoPanel(nullptr, "Running", LV_PALETTE_GREEN);
         mainView.logToScreen("FTP Server started!");
@@ -328,15 +393,19 @@ void FTPServer::checkFtpServerStarted() {
         snprintf(userpassStr, sizeof(userpassStr), "User: %s  Pass: %s  Port: %d", ftpUsername, ftpPassword, ftpPort);
         mainView.logToScreen(userpassStr);
         mainView.logToScreen("Ready for connections...");
-        lv_obj_add_state(settingsButton, LV_STATE_DISABLED);
-        lv_obj_add_flag(settingsButton, LV_OBJ_FLAG_HIDDEN);
+        if (settingsButton != nullptr) {
+            lv_obj_add_state(settingsButton, LV_STATE_DISABLED);
+            lv_obj_add_flag(settingsButton, LV_OBJ_FLAG_HIDDEN);
+        }
     } else {
-        if (spinner) {
+        if (spinner != nullptr) {
             lv_obj_add_flag(spinner, LV_OBJ_FLAG_HIDDEN);
         }
         mainView.updateInfoPanel(nullptr, "Error", LV_PALETTE_RED);
         mainView.logToScreen("ERROR: Failed to start FTP server!");
-        lv_obj_remove_state(connectSwitch, LV_STATE_CHECKED);
+        if (connectSwitch != nullptr) {
+            lv_obj_remove_state(connectSwitch, LV_STATE_CHECKED);
+        }
     }
 }
 
@@ -368,7 +437,7 @@ void FTPServer::onSwitchToggled(bool checked) {
             ftpServer->start();
 
             // Schedule a timer to check server status after 200ms (non-blocking)
-            lv_timer_create(ftpStartCheckTimerCallback, 200, this);
+            ftpStartCheckTimer = lv_timer_create(ftpStartCheckTimerCallback, 200, this);
         }
     } else {
         if (ftpServer) {
@@ -464,6 +533,12 @@ void FTPServer::onShow(AppHandle appHandle, lv_obj_t* parent) {
 
 void FTPServer::onHide(AppHandle context) {
     ESP_LOGI(TAG, "onHide called");
+
+    // Cancel pending timer to prevent callback after teardown
+    if (ftpStartCheckTimer != nullptr) {
+        lv_timer_delete(ftpStartCheckTimer);
+        ftpStartCheckTimer = nullptr;
+    }
 
     // Stop active view
     stopActiveView();

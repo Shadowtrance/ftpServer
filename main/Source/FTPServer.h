@@ -17,6 +17,7 @@ class FTPServer final : public App {
     lv_obj_t* spinner = nullptr;
     lv_obj_t* connectSwitch = nullptr;
     lv_obj_t* clearLogButton = nullptr;
+    lv_timer_t* ftpStartCheckTimer = nullptr;
 
     MainView mainView;
     SettingsView settingsView = SettingsView(
