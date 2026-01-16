@@ -38,6 +38,7 @@ class FTPServer final : public App {
     static void onClearLogButtonCallback(lv_event_t* event);
 
 public:
+    void checkFtpServerStarted();
 
     void onShow(AppHandle context, lv_obj_t* parent) override;
     void onHide(AppHandle context) override;

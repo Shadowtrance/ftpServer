@@ -312,6 +312,34 @@ void FTPServer::onClearLogButtonCallback(lv_event_t* event) {
     app->onClearLogButtonPressed();
 }
 
+// Timer callback to check FTP server status after start
+static void ftpStartCheckTimerCallback(lv_timer_t* timer) {
+    auto* app = static_cast<FTPServer*>(lv_timer_get_user_data(timer));
+    app->checkFtpServerStarted();
+    lv_timer_delete(timer);
+}
+
+void FTPServer::checkFtpServerStarted() {
+    if (ftpServer && ftpServer->isEnabled()) {
+        mainView.updateInfoPanel(nullptr, "Running", LV_PALETTE_GREEN);
+        mainView.logToScreen("FTP Server started!");
+
+        char userpassStr[100];
+        snprintf(userpassStr, sizeof(userpassStr), "User: %s  Pass: %s  Port: %d", ftpUsername, ftpPassword, ftpPort);
+        mainView.logToScreen(userpassStr);
+        mainView.logToScreen("Ready for connections...");
+        lv_obj_add_state(settingsButton, LV_STATE_DISABLED);
+        lv_obj_add_flag(settingsButton, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        if (spinner) {
+            lv_obj_add_flag(spinner, LV_OBJ_FLAG_HIDDEN);
+        }
+        mainView.updateInfoPanel(nullptr, "Error", LV_PALETTE_RED);
+        mainView.logToScreen("ERROR: Failed to start FTP server!");
+        lv_obj_remove_state(connectSwitch, LV_STATE_CHECKED);
+    }
+}
+
 void FTPServer::onSwitchToggled(bool checked) {
     ESP_LOGI(TAG, "Switch toggled: %d", checked);
 
@@ -339,26 +367,8 @@ void FTPServer::onSwitchToggled(bool checked) {
             ftpServer->setCredentials(ftpUsername, ftpPassword);
             ftpServer->start();
 
-            vTaskDelay(pdMS_TO_TICKS(200));
-
-            if (ftpServer->isEnabled()) {
-                mainView.updateInfoPanel(nullptr, "Running", LV_PALETTE_GREEN);
-                mainView.logToScreen("FTP Server started!");
-
-                char userpassStr[100];
-                snprintf(userpassStr, sizeof(userpassStr), "User: %s  Pass: %s  Port: %d", ftpUsername, ftpPassword, ftpPort);
-                mainView.logToScreen(userpassStr);
-                mainView.logToScreen("Ready for connections...");
-                lv_obj_add_state(settingsButton, LV_STATE_DISABLED);
-                lv_obj_add_flag(settingsButton, LV_OBJ_FLAG_HIDDEN);
-            } else {
-                if (spinner) {
-                    lv_obj_add_flag(spinner, LV_OBJ_FLAG_HIDDEN);
-                }
-                mainView.updateInfoPanel(nullptr, "Error", LV_PALETTE_RED);
-                mainView.logToScreen("ERROR: Failed to start FTP server!");
-                lv_obj_remove_state(connectSwitch, LV_STATE_CHECKED);
-            }
+            // Schedule a timer to check server status after 200ms (non-blocking)
+            lv_timer_create(ftpStartCheckTimerCallback, 200, this);
         }
     } else {
         if (ftpServer) {
