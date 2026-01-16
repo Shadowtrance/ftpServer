@@ -167,7 +167,7 @@ private:
 
     int ftp_buff_size;
     int ftp_timeout;
-    const char* FTP_TAG;
+    const char* TAG;
     const char* MOUNT_POINT;
 
     ftp_data_t ftp_data;
@@ -183,6 +183,7 @@ private:
     static const ftp_cmd_t ftp_cmd_table[];
 
     // Private helper methods
+    bool sanitize_path(const char* path, size_t max_len = 0);
     void translate_path(char* actual, size_t actual_size, const char* display);
     void get_full_path(char* fullname, size_t size, const char* display_path);
     bool secure_compare(const char* a, const char* b, size_t len);
