@@ -385,6 +385,10 @@ void FTPServer::checkFtpServerStarted() {
     // Clear the timer pointer since we're being called (timer will be deleted after this)
     ftpStartCheckTimer = nullptr;
 
+    if (activeView != &mainView) {
+        return;
+    }
+
     if (ftpServer && ftpServer->isEnabled()) {
         mainView.updateInfoPanel(nullptr, "Running", LV_PALETTE_GREEN);
         mainView.logToScreen("FTP Server started!");

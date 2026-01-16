@@ -114,6 +114,10 @@ void MainView::clearLog() {
 
 void MainView::showWifiPrompt() {
     if (!logTextarea) return;
+    if (wifiCard) {
+        lv_obj_delete(wifiCard);
+        wifiCard = nullptr;
+    }
 
     lv_coord_t width = lv_obj_get_width(mainWrapper);
     bool isSmall = (width < 240);
