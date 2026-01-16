@@ -436,10 +436,22 @@ void FTPServer::onSwitchToggled(bool checked) {
             ftpServer->setCredentials(ftpUsername, ftpPassword);
             ftpServer->start();
 
+            // Cancel any existing timer before creating a new one
+            if (ftpStartCheckTimer != nullptr) {
+                lv_timer_delete(ftpStartCheckTimer);
+                ftpStartCheckTimer = nullptr;
+            }
+
             // Schedule a timer to check server status after 200ms (non-blocking)
             ftpStartCheckTimer = lv_timer_create(ftpStartCheckTimerCallback, 200, this);
         }
     } else {
+        // Cancel any pending start check timer
+        if (ftpStartCheckTimer != nullptr) {
+            lv_timer_delete(ftpStartCheckTimer);
+            ftpStartCheckTimer = nullptr;
+        }
+
         if (ftpServer) {
             ESP_LOGI(TAG, "Stopping FTP Server...");
             ftpServer->stop();
