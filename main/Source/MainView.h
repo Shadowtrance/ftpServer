@@ -9,10 +9,6 @@
 
 class MainView final : public View {
 
-public:
-
-    typedef void (*LogCallback)(const char* message);
-
 private:
 
     lv_obj_t* parent = nullptr;
@@ -36,6 +32,7 @@ public:
     void updateInfoPanel(const char* ip, const char* status, lv_palette_t color);
     void logToScreen(const char* message);
     void showWifiPrompt();
+    void clearLog();
 
     bool hasValidLogArea() const { return logTextarea != nullptr; }
 };

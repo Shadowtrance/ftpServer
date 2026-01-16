@@ -16,6 +16,7 @@ class FTPServer final : public App {
     lv_obj_t* settingsButton = nullptr;
     lv_obj_t* spinner = nullptr;
     lv_obj_t* connectSwitch = nullptr;
+    lv_obj_t* clearLogButton = nullptr;
 
     MainView mainView;
     SettingsView settingsView = SettingsView(
@@ -30,9 +31,11 @@ class FTPServer final : public App {
     void onSettingsSaved(const char* username, const char* password, int port);
     void onSettingsButtonPressed();
     void onSwitchToggled(bool checked);
+    void onClearLogButtonPressed();
 
     static void onSwitchToggledCallback(lv_event_t* event);
     static void onSettingsButtonCallback(lv_event_t* event);
+    static void onClearLogButtonCallback(lv_event_t* event);
 
 public:
 

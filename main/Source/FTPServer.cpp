@@ -223,6 +223,9 @@ void FTPServer::showMainView() {
     if (connectSwitch) {
         lv_obj_remove_flag(connectSwitch, LV_OBJ_FLAG_HIDDEN);
     }
+    if (clearLogButton) {
+        lv_obj_remove_flag(clearLogButton, LV_OBJ_FLAG_HIDDEN);
+    }
 
     // Update UI based on server state
     if (ftpServer && ftpServer->isEnabled()) {
@@ -261,6 +264,9 @@ void FTPServer::showSettingsView() {
     if (spinner) {
         lv_obj_add_flag(spinner, LV_OBJ_FLAG_HIDDEN);
     }
+    if (clearLogButton) {
+        lv_obj_add_flag(clearLogButton, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 void FTPServer::onSettingsSaved(const char* username, const char* password, int port) {
@@ -297,6 +303,15 @@ void FTPServer::onSettingsButtonCallback(lv_event_t* event) {
     app->onSettingsButtonPressed();
 }
 
+void FTPServer::onClearLogButtonPressed() {
+    mainView.clearLog();
+}
+
+void FTPServer::onClearLogButtonCallback(lv_event_t* event) {
+    auto* app = static_cast<FTPServer*>(lv_event_get_user_data(event));
+    app->onClearLogButtonPressed();
+}
+
 void FTPServer::onSwitchToggled(bool checked) {
     ESP_LOGI(TAG, "Switch toggled: %d", checked);
 
@@ -324,7 +339,7 @@ void FTPServer::onSwitchToggled(bool checked) {
             ftpServer->setCredentials(ftpUsername, ftpPassword);
             ftpServer->start();
 
-            vTaskDelay(pdMS_TO_TICKS(500));
+            vTaskDelay(pdMS_TO_TICKS(200));
 
             if (ftpServer->isEnabled()) {
                 mainView.updateInfoPanel(nullptr, "Running", LV_PALETTE_GREEN);
@@ -335,6 +350,7 @@ void FTPServer::onSwitchToggled(bool checked) {
                 mainView.logToScreen(userpassStr);
                 mainView.logToScreen("Ready for connections...");
                 lv_obj_add_state(settingsButton, LV_STATE_DISABLED);
+                lv_obj_add_flag(settingsButton, LV_OBJ_FLAG_HIDDEN);
             } else {
                 if (spinner) {
                     lv_obj_add_flag(spinner, LV_OBJ_FLAG_HIDDEN);
@@ -354,6 +370,7 @@ void FTPServer::onSwitchToggled(bool checked) {
             mainView.updateInfoPanel(nullptr, "Stopped", LV_PALETTE_GREY);
             mainView.logToScreen("FTP Server stopped");
             lv_obj_remove_state(settingsButton, LV_STATE_DISABLED);
+            lv_obj_remove_flag(settingsButton, LV_OBJ_FLAG_HIDDEN);
         }
     }
 }
@@ -413,6 +430,9 @@ void FTPServer::onShow(AppHandle appHandle, lv_obj_t* parent) {
     // Add settings button to toolbar
     settingsButton = tt_lvgl_toolbar_add_text_button_action(toolbar, LV_SYMBOL_SETTINGS, onSettingsButtonCallback, this);
 
+    // Add clear log button to toolbar
+    clearLogButton = tt_lvgl_toolbar_add_text_button_action(toolbar, LV_SYMBOL_TRASH, onClearLogButtonCallback, this);
+
     // Add switch to toolbar
     connectSwitch = tt_lvgl_toolbar_add_switch_action(toolbar);
     lv_obj_add_event_cb(connectSwitch, onSwitchToggledCallback, LV_EVENT_VALUE_CHANGED, this);
@@ -456,4 +476,5 @@ void FTPServer::onHide(AppHandle context) {
     settingsButton = nullptr;
     spinner = nullptr;
     connectSwitch = nullptr;
+    clearLogButton = nullptr;
 }

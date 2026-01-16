@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstring>
 #include <tt_app.h>
+#include <tt_lvgl_keyboard.h>
 
 void MainView::wifiConnectCallback(lv_event_t* e) {
     tt_app_start("WifiManage");
@@ -56,6 +57,8 @@ void MainView::onStart(lv_obj_t* parentWidget, FtpServer::Server* server) {
     lv_obj_remove_flag(logTextarea, LV_OBJ_FLAG_CLICK_FOCUSABLE);
     lv_textarea_set_cursor_click_pos(logTextarea, false);
     lv_obj_set_scrollbar_mode(logTextarea, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_remove_state(logTextarea, LV_STATE_FOCUSED);
+    tt_lvgl_software_keyboard_hide();
 }
 
 void MainView::onStop() {
@@ -98,6 +101,14 @@ void MainView::logToScreen(const char* message) {
     lv_textarea_set_text(logTextarea, buffer);
 
     lv_obj_scroll_to_y(logTextarea, LV_COORD_MAX, LV_ANIM_ON);
+    tt_lvgl_unlock();
+}
+
+void MainView::clearLog() {
+    if (!logTextarea) return;
+
+    tt_lvgl_lock(tt::kernel::MAX_TICKS);
+    lv_textarea_set_text(logTextarea, "");
     tt_lvgl_unlock();
 }
 

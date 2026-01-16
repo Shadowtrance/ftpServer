@@ -70,6 +70,7 @@ void SettingsView::onStart(lv_obj_t* parent, const char* username, const char* p
     usernameInput = lv_textarea_create(userRow);
     lv_textarea_set_one_line(usernameInput, true);
     lv_textarea_set_text(usernameInput, username);
+    lv_textarea_set_placeholder_text(usernameInput, "user");
     lv_obj_set_width(usernameInput, isSmall ? LV_PCT(55) : LV_PCT(60));
     lv_obj_set_style_bg_color(usernameInput, lv_color_hex(0x1a1a1a), 0);
     lv_obj_set_style_border_color(usernameInput, lv_color_hex(0x555555), 0);
@@ -82,6 +83,7 @@ void SettingsView::onStart(lv_obj_t* parent, const char* username, const char* p
     passwordInput = lv_textarea_create(passRow);
     lv_textarea_set_one_line(passwordInput, true);
     lv_textarea_set_text(passwordInput, password);
+    lv_textarea_set_placeholder_text(passwordInput, "pass");
     lv_obj_set_width(passwordInput, isSmall ? LV_PCT(55) : LV_PCT(60));
     lv_obj_set_style_bg_color(passwordInput, lv_color_hex(0x1a1a1a), 0);
     lv_obj_set_style_border_color(passwordInput, lv_color_hex(0x555555), 0);

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <lvgl.h>
-
 class View {
 public:
 
