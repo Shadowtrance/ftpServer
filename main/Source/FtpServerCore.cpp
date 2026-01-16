@@ -458,7 +458,7 @@ bool Server::create_listening_socket(int32_t* sd, uint32_t port, uint8_t backlog
 
 Server::ftp_result_t Server::wait_for_connection(int32_t l_sd, int32_t* n_sd, uint32_t* ip_addr) {
     struct sockaddr_in sClientAddress;
-    socklen_t in_addrSize;
+    socklen_t in_addrSize = sizeof(sClientAddress);
 
     *n_sd = accept(l_sd, (struct sockaddr*)&sClientAddress, (socklen_t*)&in_addrSize);
     int32_t _sd = *n_sd;
@@ -742,7 +742,8 @@ void Server::process_cmd() {
     memset(bufptr, 0, FTP_MAX_PARAM_SIZE + FTP_CMD_SIZE_MAX);
     ftp_data.closechild = false;
 
-    result = recv_non_blocking(ftp_data.c_sd, ftp_cmd_buffer, FTP_MAX_PARAM_SIZE + FTP_CMD_SIZE_MAX, &len);
+    const int32_t cmd_buf_cap = FTP_MAX_PARAM_SIZE + FTP_CMD_SIZE_MAX;
+    result = recv_non_blocking(ftp_data.c_sd, ftp_cmd_buffer, cmd_buf_cap - 1, &len);
     if (result == E_FTP_RESULT_FAILED) {
         ESP_LOGI(FTP_TAG, "Client disconnected");
         close_cmd_data();
@@ -750,6 +751,9 @@ void Server::process_cmd() {
         return;
     }
     if (result == E_FTP_RESULT_OK) {
+        if (len >= cmd_buf_cap) {
+            len = cmd_buf_cap - 1;
+        }
         ftp_cmd_buffer[len] = '\0';
         ftp_cmd_index_t cmd = pop_command(&bufptr);
         if (!ftp_data.loggin.passvalid &&

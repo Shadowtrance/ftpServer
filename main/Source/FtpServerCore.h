@@ -1,7 +1,7 @@
 #ifndef FTP_SERVER_CORE_H
 #define FTP_SERVER_CORE_H
 
-#include "dirent.h"
+#include <dirent.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/queue.h"
