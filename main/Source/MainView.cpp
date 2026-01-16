@@ -87,19 +87,44 @@ void MainView::updateInfoPanel(const char* ip, const char* status, lv_palette_t 
 }
 
 void MainView::logToScreen(const char* message) {
-    if (!logTextarea) return;
+    if (!logTextarea || !message || message[0] == '\0') return;
+
+    const int MAX_LINES = 50;
 
     tt_lvgl_lock(tt::kernel::MAX_TICKS);
     const char* current = lv_textarea_get_text(logTextarea);
-    char buffer[512];
 
+    // Treat empty string same as nullptr (ignores placeholder)
+    if (current && current[0] == '\0') {
+        current = nullptr;
+    }
+
+    // Count existing lines
+    int lineCount = 0;
     if (current && current[0] != '\0') {
-        snprintf(buffer, sizeof(buffer), "%s\n%s", current, message);
+        for (const char* p = current; *p; p++) {
+            if (*p == '\n') lineCount++;
+        }
+        lineCount++; // Count the last line (no trailing newline)
+    }
+
+    // Only trim if we EXCEED the limit (not equal to it)
+    const char* start = current;
+    if (lineCount > MAX_LINES && current) {
+        start = strchr(current, '\n');
+        if (start) start++; // Skip past the newline
+        else start = current;
+    }
+
+    // Build new text
+    char buffer[512];
+    if (start && start[0] != '\0') {
+        snprintf(buffer, sizeof(buffer), "%s\n%s", start, message);
     } else {
         snprintf(buffer, sizeof(buffer), "%s", message);
     }
-    lv_textarea_set_text(logTextarea, buffer);
 
+    lv_textarea_set_text(logTextarea, buffer);
     lv_obj_scroll_to_y(logTextarea, LV_COORD_MAX, LV_ANIM_ON);
     tt_lvgl_unlock();
 }

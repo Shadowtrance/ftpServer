@@ -72,7 +72,8 @@ Server::Server()
       ftp_scratch_buffer(nullptr),
       ftp_cmd_buffer(nullptr),
       ftp_stop(0),
-      ftp_nlist(0) {
+      ftp_nlist(0),
+      ftp_cmd_port(FTP_CMD_PORT) {
     ftp_mutex = xSemaphoreCreateMutex();
     if (!ftp_mutex) {
         ESP_LOGE(FTP_TAG, "Failed to create FTP mutex!");
@@ -104,6 +105,12 @@ void Server::register_screen_log_callback(void (*callback)(const char*)) {
 void Server::log_to_screen(const char* format, ...) {
     auto cb = screen_log_callback.load(std::memory_order_acquire);
     if (!cb) return;
+
+    // Throttle progress messages (only every Nth call)
+    if (strstr(format, "total:") != nullptr) {
+        static uint32_t progress_counter = 0;
+        if (++progress_counter % 5 != 0) return; // Show every 5th progress
+    }
 
     uint32_t now = mp_hal_ticks_ms();
 
@@ -1192,7 +1199,7 @@ int Server::run(uint32_t elapsed) {
             wait_for_enabled();
             break;
         case E_FTP_STE_START:
-            if (create_listening_socket(&ftp_data.lc_sd, FTP_CMD_PORT, FTP_CMD_CLIENTS_MAX - 1)) {
+            if (create_listening_socket(&ftp_data.lc_sd, ftp_cmd_port, FTP_CMD_CLIENTS_MAX - 1)) {
                 ftp_data.state = E_FTP_STE_READY;
             }
             break;
@@ -1608,6 +1615,20 @@ void Server::setCredentials(const char* username, const char* password) {
     }
 
     ESP_LOGI(FTP_TAG, "Credentials updated - user:[%s] pass:[%s]", ftp_user, ftp_pass);
+}
+
+void Server::setPort(uint16_t port) {
+    if (ftp_mutex) {
+        xSemaphoreTake(ftp_mutex, portMAX_DELAY);
+    }
+
+    ftp_cmd_port = port;
+
+    if (ftp_mutex) {
+        xSemaphoreGive(ftp_mutex);
+    }
+
+    ESP_LOGI(FTP_TAG, "Port updated to %u", port);
 }
 
 } // namespace FtpServer

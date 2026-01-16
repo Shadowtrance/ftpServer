@@ -85,6 +85,7 @@ public:
     int getState() const;
     void register_screen_log_callback(void (*callback)(const char*));
     void setCredentials(const char* username, const char* password);
+    void setPort(uint16_t port);
 
 private:
 
@@ -175,6 +176,7 @@ private:
     char ftp_user[FTP_USER_PASS_LEN_MAX + 1];
     char ftp_pass[FTP_USER_PASS_LEN_MAX + 1];
     uint8_t ftp_nlist;
+    uint16_t ftp_cmd_port;
 
     static const ftp_cmd_t ftp_cmd_table[];
 

@@ -66,6 +66,9 @@ static bool decodePassword(const char* encoded, char* plain, size_t plainSize) {
     if (len % 2 != 0) {
         return false;
     }
+    if ((len / 2) >= plainSize) {
+        return false;
+    }
 
     size_t outIdx = 0;
     for (size_t i = 0; i < len && outIdx + 1 < plainSize; i += 2) {
@@ -346,6 +349,7 @@ void FTPServer::onSettingsSaved(const char* username, const char* password, int 
 
     if (ftpServer) {
         ftpServer->setCredentials(ftpUsername, ftpPassword);
+        ftpServer->setPort(static_cast<uint16_t>(ftpPort));
     }
 
     saveSettings();
@@ -498,10 +502,13 @@ void FTPServer::onShow(AppHandle appHandle, lv_obj_t* parent) {
     ftpServer = new FtpServer::Server();
     if (!ftpServer) {
         ESP_LOGE(TAG, "Failed to create FTP server!");
+        currentAppHandle = nullptr;
+        currentInstance = nullptr;
         return;
     }
 
     ftpServer->setCredentials(ftpUsername, ftpPassword);
+    ftpServer->setPort(static_cast<uint16_t>(ftpPort));
 
     ftpServer->register_screen_log_callback([](const char* msg) {
         if (currentInstance && currentInstance->mainView.hasValidLogArea()) {
